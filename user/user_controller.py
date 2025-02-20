@@ -14,9 +14,10 @@ from datetime import datetime, timedelta
 import os
 from dotenv import load_dotenv
 load_dotenv()
-import jwt
+# import jwt
+from authlib.jose import jwt
 
-SECRET_KEY = "software_architecture"
+SECRET_KEY = "quoc_secret_key"
 
 user_router = APIRouter()
 
@@ -24,9 +25,10 @@ security = HTTPBearer()
 
 @user_router.get("/me")
 async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security), db: AsyncSession = Depends(get_db)):
-  token = credentials.credentials
   try: 
-    payload = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
+    token = credentials.credentials
+    # payload = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
+    payload = jwt.decode(token, SECRET_KEY)
     user_id: str = payload.get("sub")
     if user_id is None:
       raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token: no user id", headers={"WWW-Authenticate": "Bearer"})
@@ -40,7 +42,8 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
     raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
   return user
 
-@user_router.get("/{email}")
+
+@user_router.get("/info/{email}")
 async def get_user_by_email(email: str, db: AsyncSession = Depends(get_db)):
   result = await db.execute(select(User).where(User.email == email))
   user = result.scalars().first()
@@ -51,7 +54,6 @@ async def get_user_by_email(email: str, db: AsyncSession = Depends(get_db)):
 async def get_user_conversations(email: str, db: AsyncSession = Depends(get_db)):
   result = await db.execute(select(User.id).where(User.email == email))
   userid = result.scalars().first()
-  print('userid', userid)
   if not userid:
     raise HTTPException(status_code=404, detail="User not found")
   
@@ -72,7 +74,7 @@ async def get_user_conversations(email: str, db: AsyncSession = Depends(get_db))
   return conversations
 
 
-@user_router.post("/")
+@user_router.post("/signup")
 async def create_new_user(data: INewUserData, db: AsyncSession = Depends(get_db)):
   existing_user = await db.execute(select(User).where(User.email == data.email))
   if existing_user is None:
@@ -85,6 +87,8 @@ async def create_new_user(data: INewUserData, db: AsyncSession = Depends(get_db)
   )
   new_user.set_password(new_user.password)
   db.add(new_user)
+  await db.commit()
+  await db.refresh(new_user)
   
   payload = {
     "sub": new_user.id,
@@ -92,9 +96,8 @@ async def create_new_user(data: INewUserData, db: AsyncSession = Depends(get_db)
     "exp": datetime.utcnow() + timedelta(hours=24)
   }
   
-  await db.commit()
-  await db.refresh(new_user)
-  token = jwt.encode(payload, SECRET_KEY, algorithm="HS256")
+  # token = jwt.encode(payload, SECRET_KEY, algorithm="HS256")
+  token = jwt.encode({"alg": "HS256"}, payload, SECRET_KEY)
   return {"access_token": token, "token_type": "bearer"}
 
 
@@ -114,7 +117,8 @@ async def login(data: ILoginUserData, db: AsyncSession = Depends(get_db)):
     "email": user.email,
     "exp": datetime.utcnow() + timedelta(hours=24)
   }
-  token = jwt.encode(payload, SECRET_KEY, algorithm="HS256")
+  # token = jwt.encode(payload, SECRET_KEY, algorithm="HS256")
+  token = jwt.encode({"alg": "HS256"}, payload, SECRET_KEY)
   return {"access_token": token, "token_type": "bearer"}
 
   

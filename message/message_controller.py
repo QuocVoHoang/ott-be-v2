@@ -1,5 +1,4 @@
 from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect
-from message.message_service import websocket_manager
 from models.models import Message
 from database import get_db
 from sqlalchemy.ext.asyncio import AsyncSession
