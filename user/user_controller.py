@@ -40,24 +40,24 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
     raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
   return user
 
-@user_router.get("/{user_id}")
-async def get_user_by_id(user_id: str, db: AsyncSession = Depends(get_db)):
-  result = await db.execute(select(User).where(User.id == user_id))
-  user = result.scalars().all()
+@user_router.get("/{email}")
+async def get_user_by_email(email: str, db: AsyncSession = Depends(get_db)):
+  result = await db.execute(select(User).where(User.email == email))
+  user = result.scalars().first()
   return user
 
 
-
-@user_router.get("/conversations/{user_id}")
-async def get_user_conversations(user_id: str, db: AsyncSession = Depends(get_db)):
-  result = await db.execute(select(User).where(User.id == user_id))
-  user = result.scalars().first()
-  if not user:
+@user_router.get("/{email}/conversations")
+async def get_user_conversations(email: str, db: AsyncSession = Depends(get_db)):
+  result = await db.execute(select(User.id).where(User.email == email))
+  userid = result.scalars().first()
+  print('userid', userid)
+  if not userid:
     raise HTTPException(status_code=404, detail="User not found")
   
   result = await db.execute(
     select(ConversationParticipant.conversation_id)
-    .where(ConversationParticipant.user_id == user_id)
+    .where(ConversationParticipant.user_id == userid)
   )
   conversation_ids = [row[0] for row in result.fetchall()]
 
@@ -118,15 +118,15 @@ async def login(data: ILoginUserData, db: AsyncSession = Depends(get_db)):
   return {"access_token": token, "token_type": "bearer"}
 
   
-@user_router.put("/update-avatar/{user_id}")
-async def update_user_avatar(user_id: str, data: IUpdateUserAvatarData, db: AsyncSession = Depends(get_db)):
-  result = await db.execute(select(User).where(User.id == user_id))
+@user_router.put("/update-avatar/{email}")
+async def update_user_avatar(email: str, data: IUpdateUserAvatarData, db: AsyncSession = Depends(get_db)):
+  result = await db.execute(select(User).where(User.email == email))
   user = result.scalars().first()
   if user is None:
     raise HTTPException(status_code=404, detail="User not found")
 
   user.avatar_url = data.avatar_url
-  user.updated_at = datetime.datetime.utcnow()
+  user.updated_at = datetime.utcnow()
   
   await db.commit()
   await db.refresh(user)
@@ -134,15 +134,15 @@ async def update_user_avatar(user_id: str, data: IUpdateUserAvatarData, db: Asyn
   return {"message": "User avatar updated"}
 
 
-@user_router.put("/update-username/{user_id}")
-async def update_user_name(user_id: str, data: IUpdateUserNameData, db: AsyncSession = Depends(get_db)):
-  result = await db.execute(select(User).where(User.id == user_id))
+@user_router.put("/update-username/{email}")
+async def update_user_name(email: str, data: IUpdateUserNameData, db: AsyncSession = Depends(get_db)):
+  result = await db.execute(select(User).where(User.email == email))
   user = result.scalars().first()
   if user is None:
     raise HTTPException(status_code=404, detail="User not found")
 
   user.username = data.username
-  user.updated_at = datetime.datetime.utcnow()
+  user.updated_at = datetime.utcnow()
   
   await db.commit()
   await db.refresh(user)
@@ -150,9 +150,9 @@ async def update_user_name(user_id: str, data: IUpdateUserNameData, db: AsyncSes
   return {"message": "User name updated"}
 
 
-@user_router.delete("/{user_id}")
-async def delete_user(user_id: str, db: AsyncSession = Depends(get_db)):
-  result = await db.execute(select(User).where(User.id == user_id))
+@user_router.delete("/{email}")
+async def delete_user(email: str, db: AsyncSession = Depends(get_db)):
+  result = await db.execute(select(User).where(User.email == email))
   user = result.scalars().first()
   if user is None:
     raise HTTPException(status_code=404, detail="User not found")

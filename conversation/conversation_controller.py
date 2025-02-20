@@ -14,41 +14,47 @@ from database import get_db
 
 conversation_router = APIRouter()
 
-@conversation_router.get("/{conversation_id}")
-async def get_conversation_by_id(conversation_id: str, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(Conversation).where(Conversation.id == conversation_id))
+@conversation_router.get("/{conversation_name}")
+async def get_conversation_by_name(conversation_name: str, db: AsyncSession = Depends(get_db)):
+    """params: conversation_name"""
+    result = await db.execute(select(Conversation).where(Conversation.name == conversation_name))
     conversation = result.scalars().first()
     return conversation
 
-@conversation_router.get("/users/{conversation_id}")
-async def get_conversation_users(conversation_id: str, db: AsyncSession = Depends(get_db)):
+
+@conversation_router.get("/users/{conversation_name}")
+async def get_conversation_users(conversation_name: str, db: AsyncSession = Depends(get_db)):
+    """params: conversation_name"""
+    result = await db.execute(select(Conversation.id).where(Conversation.name == conversation_name))
+    conversation_id = result.scalars().first()
+    
     result = await db.execute(select(ConversationParticipant).where(ConversationParticipant.conversation_id == conversation_id))
     users = result.scalars().all()
     return users
 
+
 @conversation_router.post("/")
 async def create_new_conversation(data: INewConversationData, db: AsyncSession = Depends(get_db)):
+    """params: participants are emails"""
     if data.type not in ["private", "group"]:
         raise HTTPException(status_code=400, detail="Invalid conversation type")
     
     if len(data.participants) < 2:
         raise HTTPException(status_code=400, detail="At least 2 participants required")
     
-    result = await db.execute(select(User.id).where(User.id == data.created_by))
+    result = await db.execute(select(User.id).where(User.email == data.created_by))
     creator = result.scalars().first()
     if not creator:
         raise HTTPException(status_code=400, detail="Creator does not exist")
 
-    result = await db.execute(select(User.id).where(User.id.in_(data.participants)))
-    existing_users = {row[0] for row in result.fetchall()}
-    missing_users = set(data.participants) - existing_users
-    if missing_users:
-        raise HTTPException(status_code=400, detail=f"Users not found: {missing_users}")
+    result = await db.execute(select(User.id, User.email).where(User.email.in_(data.participants)))
+    user_ids = result.scalars().all()
 
     new_conversation = Conversation(
         name=data.name,
         type=data.type,
-        created_by=data.created_by
+        avatar_url='',
+        created_by=creator
     )
     
     db.add(new_conversation)
@@ -60,7 +66,7 @@ async def create_new_conversation(data: INewConversationData, db: AsyncSession =
             conversation_id=new_conversation.id,
             user_id=user_id
         )
-        for user_id in data.participants
+        for user_id in user_ids
     ]
     db.add_all(participants_records)
     await db.commit()
@@ -72,8 +78,11 @@ async def create_new_conversation(data: INewConversationData, db: AsyncSession =
     }
 
 
-@conversation_router.put("/update-avatar/{conversation_id}")
-async def update_conversation_name(conversation_id: str, data: IUpdateConversationAvatarData, db: AsyncSession = Depends(get_db)):
+@conversation_router.put("/update-avatar/{conversation_name}")
+async def update_conversation_name(conversation_name: str, data: IUpdateConversationAvatarData, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(Conversation.id).where(Conversation.name == conversation_name))
+    conversation_id = result.scalars().first()
+    
     result = await db.execute(select(Conversation).where(Conversation.id == conversation_id))
     conversation = result.scalars().first()
     if conversation is None:
@@ -88,8 +97,11 @@ async def update_conversation_name(conversation_id: str, data: IUpdateConversati
     return {"message": "Conversation avatar updated"}
 
 
-@conversation_router.put("/update-name/{conversation_id}")
-async def update_conversation_name(conversation_id: str, data: IUpdateConversationNameData, db: AsyncSession = Depends(get_db)):
+@conversation_router.put("/update-name/{conversation_name}")
+async def update_conversation_name(conversation_name: str, data: IUpdateConversationNameData, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(Conversation.id).where(Conversation.name == conversation_name))
+    conversation_id = result.scalars().first()
+    
     result = await db.execute(select(Conversation).where(Conversation.id == conversation_id))
     conversation = result.scalars().first()
     if conversation is None:
@@ -104,68 +116,71 @@ async def update_conversation_name(conversation_id: str, data: IUpdateConversati
     return {"message": "Conversation name updated"}
 
 
-@conversation_router.put("/add-participants/{conversation_id}")
-async def update_conversation_add_participants(conversation_id: str, data: IUpdateConversationParticipantData, db: AsyncSession = Depends(get_db)):
+@conversation_router.put("/add-participants/{conversation_name}")
+async def update_conversation_add_participants(conversation_name: str, data: IUpdateConversationParticipantData, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(Conversation.id).where(Conversation.name == conversation_name))
+    conversation_id = result.scalars().first()
+
     result = await db.execute(select(Conversation).where(Conversation.id == conversation_id))
     conversation = result.scalars().first()
     if conversation is None:
         raise HTTPException(status_code=404, detail="Conversation not found")
 
-    result = await db.execute(select(User.id).where(User.id.in_(data.participants)))
-    existing_users = {row[0] for row in result.fetchall()}
-    missing_users = set(data.participants) - existing_users
-    
-    if missing_users:
-        raise HTTPException(status_code=400, detail=f"Users not found: {missing_users}")
+    result = await db.execute(select(User.id).where(User.email.in_(data.participants)))
+    user_ids = result.scalars().all()
 
     result = await db.execute(
         select(ConversationParticipant.user_id)
         .where(ConversationParticipant.conversation_id == conversation_id, 
-            ConversationParticipant.user_id.in_(data.participants))
+            ConversationParticipant.user_id.in_(user_ids))
     )
-
-    existing_participants = {row[0] for row in result.fetchall()}
-
-    new_users = list(set(data.participants) - existing_participants)
     
-    if not new_users:
-        raise HTTPException(status_code=400, detail="All users are already in conversation")
+    existing_participants = {row[0] for row in result.all()} 
+    new_user_ids = [user_id for user_id in user_ids if user_id not in existing_participants]
 
     new_participants = [
         ConversationParticipant(conversation_id=conversation_id, user_id=user_id)
-        for user_id in new_users
+        for user_id in new_user_ids
     ]
+    
     db.add_all(new_participants)
     await db.commit()
 
     return {
         "message": "Users added successfully",
         "conversation_id": conversation_id,
-        "added_users": new_users
+        "added_users": data.participants
     }
 
 
-@conversation_router.put("/remove-participant/{conversation_id}")
-async def update_conversation_remove_participant(conversation_id: str, data: IRemoveParticipantData, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(Conversation).where(Conversation.id == conversation_id))
-    conversation = result.scalars().first()
-    if conversation is None:
+@conversation_router.put("/remove-participant/{conversation_name}")
+async def update_conversation_remove_participant(conversation_name: str, data: IRemoveParticipantData, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(Conversation.id).where(Conversation.name == conversation_name))
+    conversation_id = result.scalars().first()
+    print('conversation_id', conversation_id)
+    if conversation_id is None:
         raise HTTPException(status_code=404, detail="Conversation not found")
+    
+    result = await db.execute(select(User.id).where(User.email == data.participant))
+    userid = result.scalars().first()
+    print('userid', userid)
+    if conversation_id is None:
+        raise HTTPException(status_code=404, detail="User not in conversation")
 
     result = await db.execute(
         select(ConversationParticipant)
         .where(
             ConversationParticipant.conversation_id == conversation_id, 
-            ConversationParticipant.user_id == data.participant
+            ConversationParticipant.user_id == userid
         )
     )
     user = result.scalars().first()
+    print('user.id', user.id)
 
     if not user:
         raise HTTPException(status_code=400, detail=f"User not in conversation")
     
     await db.delete(user)
-    
     await db.commit()
 
     return {
@@ -175,8 +190,11 @@ async def update_conversation_remove_participant(conversation_id: str, data: IRe
     }
 
 
-@conversation_router.delete("/{conversation_id}")
-async def delete_conversation(conversation_id: str, db: AsyncSession = Depends(get_db)):
+@conversation_router.delete("/{conversation_name}")
+async def delete_conversation(conversation_name: str, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(Conversation.id).where(Conversation.name == conversation_name))
+    conversation_id = result.scalars().first()
+    
     result = await db.execute(select(Conversation).where(Conversation.id == conversation_id))
     conversation = result.scalars().first()
     if conversation is None:
