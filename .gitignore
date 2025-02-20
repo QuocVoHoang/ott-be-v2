@@ -1,0 +1,58 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environment
+venv/
+.env/
+.venv/
+
+# Logs and runtime data
+*.log
+*.pid
+*.seed
+*.cover
+
+# FastAPI specific
+*.db  # Nếu bạn lưu database SQLite
+instance/
+*.sqlite3
+
+# Editor / IDE specific
+.vscode/
+.idea/
+*.swp
+*.swo
+*.iml
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# Python-specific caches
+*.pytest_cache/
+.coverage
+htmlcov/
+
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints/
+
+# Dependencies
+pip-wheel-metadata/
+*.egg-info/
+dist/
+build/
+
+# Docker-related
+docker-compose.override.yml
+.env.docker
+
+# Node.js specific (nếu có dùng frontend hoặc assets)
+node_modules/
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+.env
+env
+serviceAccountKey.json
