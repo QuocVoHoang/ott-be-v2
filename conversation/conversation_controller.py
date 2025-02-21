@@ -14,22 +14,23 @@ from database import get_db
 
 conversation_router = APIRouter()
 
-@conversation_router.get("/{conversation_name}")
-async def get_conversation_by_name(conversation_name: str, db: AsyncSession = Depends(get_db)):
-    """params: conversation_name"""
-    result = await db.execute(select(Conversation).where(Conversation.name == conversation_name))
+@conversation_router.get("/{conversation_id}")
+async def get_conversation_by_id(conversation_id: str, db: AsyncSession = Depends(get_db)):
+    """params: conversation_id"""
+    result = await db.execute(select(Conversation).where(Conversation.id == conversation_id))
     conversation = result.scalars().first()
     return conversation
 
 
-@conversation_router.get("/users/{conversation_name}")
-async def get_conversation_users(conversation_name: str, db: AsyncSession = Depends(get_db)):
-    """params: conversation_name"""
-    result = await db.execute(select(Conversation.id).where(Conversation.name == conversation_name))
-    conversation_id = result.scalars().first()
+@conversation_router.get("/users/{conversation_id}")
+async def get_conversation_users(conversation_id: str, db: AsyncSession = Depends(get_db)):
+    """params: conversation_id"""    
+    result = await db.execute(select(ConversationParticipant.user_id).where(ConversationParticipant.conversation_id == conversation_id))
+    user_ids = result.scalars().all()
     
-    result = await db.execute(select(ConversationParticipant).where(ConversationParticipant.conversation_id == conversation_id))
+    result = await db.execute(select(User).where(User.id.in_(user_ids)))
     users = result.scalars().all()
+    
     return users
 
 
@@ -78,11 +79,8 @@ async def create_new_conversation(data: INewConversationData, db: AsyncSession =
     }
 
 
-@conversation_router.put("/update-avatar/{conversation_name}")
-async def update_conversation_name(conversation_name: str, data: IUpdateConversationAvatarData, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(Conversation.id).where(Conversation.name == conversation_name))
-    conversation_id = result.scalars().first()
-    
+@conversation_router.put("/update-avatar/{conversation_id}")
+async def update_conversation_name(conversation_id: str, data: IUpdateConversationAvatarData, db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(Conversation).where(Conversation.id == conversation_id))
     conversation = result.scalars().first()
     if conversation is None:
@@ -97,11 +95,8 @@ async def update_conversation_name(conversation_name: str, data: IUpdateConversa
     return {"message": "Conversation avatar updated"}
 
 
-@conversation_router.put("/update-name/{conversation_name}")
-async def update_conversation_name(conversation_name: str, data: IUpdateConversationNameData, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(Conversation.id).where(Conversation.name == conversation_name))
-    conversation_id = result.scalars().first()
-    
+@conversation_router.put("/update-name/{conversation_id}")
+async def update_conversation_name(conversation_id: str, data: IUpdateConversationNameData, db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(Conversation).where(Conversation.id == conversation_id))
     conversation = result.scalars().first()
     if conversation is None:
@@ -116,11 +111,8 @@ async def update_conversation_name(conversation_name: str, data: IUpdateConversa
     return {"message": "Conversation name updated"}
 
 
-@conversation_router.put("/add-participants/{conversation_name}")
-async def update_conversation_add_participants(conversation_name: str, data: IUpdateConversationParticipantData, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(Conversation.id).where(Conversation.name == conversation_name))
-    conversation_id = result.scalars().first()
-
+@conversation_router.put("/add-participants/{conversation_id}")
+async def update_conversation_add_participants(conversation_id: str, data: IUpdateConversationParticipantData, db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(Conversation).where(Conversation.id == conversation_id))
     conversation = result.scalars().first()
     if conversation is None:
@@ -153,19 +145,12 @@ async def update_conversation_add_participants(conversation_name: str, data: IUp
     }
 
 
-@conversation_router.put("/remove-participant/{conversation_name}")
-async def update_conversation_remove_participant(conversation_name: str, data: IRemoveParticipantData, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(Conversation.id).where(Conversation.name == conversation_name))
-    conversation_id = result.scalars().first()
-    print('conversation_id', conversation_id)
-    if conversation_id is None:
-        raise HTTPException(status_code=404, detail="Conversation not found")
-    
+@conversation_router.put("/remove-participant/{conversation_id}")
+async def update_conversation_remove_participant(conversation_id: str, data: IRemoveParticipantData, db: AsyncSession = Depends(get_db)):        
     result = await db.execute(select(User.id).where(User.email == data.participant))
     userid = result.scalars().first()
-    print('userid', userid)
-    if conversation_id is None:
-        raise HTTPException(status_code=404, detail="User not in conversation")
+    if userid is None:
+        raise HTTPException(status_code=404, detail="User not register")
 
     result = await db.execute(
         select(ConversationParticipant)
@@ -190,11 +175,8 @@ async def update_conversation_remove_participant(conversation_name: str, data: I
     }
 
 
-@conversation_router.delete("/{conversation_name}")
-async def delete_conversation(conversation_name: str, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(Conversation.id).where(Conversation.name == conversation_name))
-    conversation_id = result.scalars().first()
-    
+@conversation_router.delete("/{conversation_id}")
+async def delete_conversation(conversation_id: str, db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(Conversation).where(Conversation.id == conversation_id))
     conversation = result.scalars().first()
     if conversation is None:

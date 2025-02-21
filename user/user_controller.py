@@ -43,9 +43,15 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
   return user
 
 
-@user_router.get("/info/{email}")
+@user_router.get("/info-email/{email}")
 async def get_user_by_email(email: str, db: AsyncSession = Depends(get_db)):
   result = await db.execute(select(User).where(User.email == email))
+  user = result.scalars().first()
+  return user
+
+@user_router.get("/info-id/{user_id}")
+async def get_user_by_id(user_id: str, db: AsyncSession = Depends(get_db)):
+  result = await db.execute(select(User).where(User.id == user_id))
   user = result.scalars().first()
   return user
 

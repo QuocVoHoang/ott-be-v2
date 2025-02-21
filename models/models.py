@@ -53,7 +53,7 @@ class Conversation(Base):
         unique=True,
         nullable=False,
     )
-    name = Column(String, unique=True, nullable=False)
+    name = Column(String, nullable=False)
     type = Column(Enum('private', 'group', name="conversation_type"), nullable=False)
     avatar_url = Column(String, nullable=True)
 
