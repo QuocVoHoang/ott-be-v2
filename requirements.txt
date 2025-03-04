@@ -18,3 +18,4 @@ python-dotenv==1.0.1
 pyjwt==2.10.0
 passlib==1.7.4
 Authlib==1.4.1
+pytz==2024.1

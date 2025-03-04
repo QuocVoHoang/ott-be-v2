@@ -5,6 +5,8 @@ from sqlalchemy.future import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from types import SimpleNamespace
 from typing import List
+import datetime
+import pytz
 
 message_router = APIRouter()
 
@@ -43,6 +45,20 @@ async def websocket_endpoint(websocket: WebSocket, db: AsyncSession = Depends(ge
       
       try:
         db.add(new_message)
+        
+        stmt = select(Conversation).where(Conversation.id == data.conversation_id)
+        result = await db.execute(stmt)
+        conversation = result.scalar_one_or_none()
+        if conversation:
+          utc_now = datetime.datetime.utcnow()
+          vietnam_tz = pytz.timezone('Asia/Ho_Chi_Minh')
+          vietnam_now = utc_now.replace(tzinfo=pytz.utc).astimezone(vietnam_tz)
+          vietnam_now_naive = vietnam_now.replace(tzinfo=None)
+          
+          conversation.updated_at = vietnam_now_naive
+          print('datetime.datetime.utcnow()', vietnam_now_naive)
+          db.add(conversation)
+          
         await db.commit()
         await db.refresh(new_message)
         print("Message saved successfully:", new_message)
