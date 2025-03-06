@@ -5,8 +5,7 @@ from sqlalchemy.future import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from types import SimpleNamespace
 from typing import List
-import datetime
-import pytz
+from utils.utils import get_vn_time
 from urllib.parse import urlparse
 from bucket.bucket_controller import s3_client, S3_BUCKET_NAME
 
@@ -29,6 +28,11 @@ class ConnectionManager:
 
 manager = ConnectionManager()
 
+from types import SimpleNamespace
+from fastapi import WebSocket, Depends
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
+
 @message_router.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket, db: AsyncSession = Depends(get_db)):
   await manager.connect(websocket)
@@ -36,46 +40,62 @@ async def websocket_endpoint(websocket: WebSocket, db: AsyncSession = Depends(ge
     while True:
       receive_message = await websocket.receive_json()
       data = SimpleNamespace(**receive_message)
-      
-      new_message = Message(
-        conversation_id=data.conversation_id,
-        sender_id=data.sender_id,
-        content=data.content,
-        type=data.type,
-        file_url=data.file_url
-      )
-      
-      try:
-        db.add(new_message)
-        
-        stmt = select(Conversation).where(Conversation.id == data.conversation_id)
-        result = await db.execute(stmt)
-        conversation = result.scalar_one_or_none()
-        if conversation:
-          utc_now = datetime.datetime.utcnow()
-          vietnam_tz = pytz.timezone('Asia/Ho_Chi_Minh')
-          vietnam_now = utc_now.replace(tzinfo=pytz.utc).astimezone(vietnam_tz)
-          vietnam_now_naive = vietnam_now.replace(tzinfo=None)
-          
-          conversation.updated_at = vietnam_now_naive
-          db.add(conversation)
-          
-        await db.commit()
-        await db.refresh(new_message)
-      except Exception as e:
-        print("Database error:", str(e))
-      
-      print('new_message.id', new_message.id)
-      message_dict = {
-        "id": new_message.id,
-        "conversation_id": new_message.conversation_id,
-        "sender_id": new_message.sender_id,
-        "content": new_message.content,
-        "type": new_message.type,
-        "file_url": new_message.file_url
-      }
 
-      await manager.broadcast(message_dict)
+      # Handle send message
+      if data.action == "send":
+        new_message = Message(
+          conversation_id=data.conversation_id,
+          sender_id=data.sender_id,
+          content=data.content,
+          type=data.type,
+          file_url=data.file_url
+        )
+        
+        try:
+          db.add(new_message)
+          
+          stmt = select(Conversation).where(Conversation.id == data.conversation_id)
+          result = await db.execute(stmt)
+          conversation = result.scalar_one_or_none()
+          if conversation:
+            conversation.updated_at = await get_vn_time()
+            db.add(conversation)
+          
+          await db.commit()
+          await db.refresh(new_message)
+          
+          message_dict = {
+            "action": "send",
+            "id": new_message.id,
+            "conversation_id": new_message.conversation_id,
+            "sender_id": new_message.sender_id,
+            "content": new_message.content,
+            "type": new_message.type,
+            "file_url": new_message.file_url
+          }
+          await manager.broadcast(message_dict)
+        except Exception as e:
+          print("Database error:", str(e))
+
+      # handle delete message
+      elif data.action == "delete":
+          message_id = data.message_id
+          try:
+            stmt = select(Message).where(Message.id == message_id)
+            result = await db.execute(stmt)
+            message = result.scalar_one_or_none()
+            if message:
+              await db.delete(message)
+              await db.commit()
+              
+              delete_dict = {
+                "action": "delete",
+                "message_id": message_id
+              }
+              await manager.broadcast(delete_dict)
+          except Exception as e:
+            print("Delete error:", str(e))
+
   except Exception as e:
     print("WebSocket error:", str(e))
   finally:

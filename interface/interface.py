@@ -39,6 +39,7 @@ class IUpdateConversationData(BaseModel):
   avatar_url: Optional[str] = None
   name: Optional[str] = None
   participants: List[str]
+  email: str
   
 class IUpdateConversationAvatarData(BaseModel):
   avatar_url: Optional[str] = None

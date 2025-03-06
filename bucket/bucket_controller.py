@@ -1,17 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.ext.asyncio import AsyncSession
-from models.models import Conversation, User, ConversationParticipant
-from interface.interface import (
-  INewConversationData, 
-  IUpdateConversationAvatarData, 
-  IUpdateConversationNameData, 
-  IUpdateConversationParticipantData,
-  IRemoveParticipantData
-)
 from sqlalchemy.future import select
-import datetime
-from database import get_db
-from fastapi import FastAPI, File, UploadFile
+from fastapi import File, UploadFile
+from utils.utils import get_vn_time
 import boto3
 import os
 from dotenv import load_dotenv

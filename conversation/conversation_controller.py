@@ -10,7 +10,8 @@ from interface.interface import (
     IUpdateConversationData
 )
 from sqlalchemy.future import select
-import datetime
+from sqlalchemy import delete
+from utils.utils import get_vn_time
 from database import get_db
 
 conversation_router = APIRouter()
@@ -98,7 +99,7 @@ async def update_conversation_name(conversation_id: str, data: IUpdateConversati
         raise HTTPException(status_code=404, detail="Conversation not found")
 
     conversation.avatar_url = data.avatar_url
-    conversation.updated_at = datetime.datetime.utcnow()
+    conversation.updated_at = await get_vn_time()
     
     await db.commit()
     await db.refresh(conversation)
@@ -114,12 +115,13 @@ async def update_conversation_name(conversation_id: str, data: IUpdateConversati
         raise HTTPException(status_code=404, detail="Conversation not found")
 
     conversation.name = data.name
-    conversation.updated_at = datetime.datetime.utcnow()
+    conversation.updated_at = await get_vn_time()
     
     await db.commit()
     await db.refresh(conversation)
 
     return {"message": "Conversation name updated"}
+
 
 @conversation_router.put("/update/{conversation_id}")
 async def update_conversation_name(conversation_id: str, data: IUpdateConversationData, db: AsyncSession = Depends(get_db)):
@@ -130,32 +132,59 @@ async def update_conversation_name(conversation_id: str, data: IUpdateConversati
 
     conversation.name = data.name
     conversation.avatar_url = data.avatar_url
-    conversation.updated_at = datetime.datetime.utcnow()
+    conversation.updated_at = await get_vn_time()
     
     result = await db.execute(select(User.id).where(User.email.in_(data.participants)))
     user_ids = result.scalars().all()
     
     result = await db.execute(
         select(ConversationParticipant.user_id)
-        .where(ConversationParticipant.conversation_id == conversation_id, 
-            ConversationParticipant.user_id.in_(user_ids))
+        .where(ConversationParticipant.conversation_id == conversation_id)
     )
-    
-    existing_participants = {row[0] for row in result.all()} 
-    new_user_ids = [user_id for user_id in user_ids if user_id not in existing_participants]
+    existing_participants = set(result.scalars().all())
+    new_user_ids = set(user_ids)
+    participants_to_remove = existing_participants - new_user_ids
+    participants_to_add = new_user_ids - existing_participants
 
-    new_participants = [
-        ConversationParticipant(conversation_id=conversation_id, user_id=user_id)
-        for user_id in new_user_ids
-    ]
-    
-    db.add_all(new_participants)
-
+    if participants_to_remove:
+        await db.execute(
+            delete(ConversationParticipant)
+            .where(
+                ConversationParticipant.conversation_id == conversation_id,
+                ConversationParticipant.user_id.in_(participants_to_remove)
+            )
+        )
+    if participants_to_add:
+        new_participants = [
+            ConversationParticipant(conversation_id=conversation_id, user_id=user_id)
+            for user_id in participants_to_add
+        ]
+        db.add_all(new_participants)
 
     await db.commit()
     await db.refresh(conversation)
+    
+    result = await db.execute(select(User.id).where(User.email == data.email))
+    userid = result.scalars().first()
+    if not userid:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    result = await db.execute(
+        select(ConversationParticipant.conversation_id)
+        .where(ConversationParticipant.user_id == userid)
+    )
+    conversation_ids = [row[0] for row in result.fetchall()]
 
-    return {"message": "Conversation updated"}
+    if not conversation_ids:
+        return {"message": "User is not in any conversation", "conversations": []}
+    
+    result = await db.execute(
+        select(Conversation).where(Conversation.id.in_(conversation_ids))
+    )
+    conversations = result.scalars().all()
+
+    return conversations
+
 
 @conversation_router.put("/add-participants/{conversation_id}")
 async def update_conversation_add_participants(conversation_id: str, data: IUpdateConversationParticipantData, db: AsyncSession = Depends(get_db)):

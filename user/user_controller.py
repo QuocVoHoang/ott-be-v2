@@ -11,11 +11,11 @@ from interface.interface import (
   ILoginUserData,
   IUpdateUserData
 )
-from datetime import datetime, timedelta
+from datetime import timedelta
+from utils.utils import get_vn_time
 import os
 from dotenv import load_dotenv
 load_dotenv()
-# import jwt
 from authlib.jose import jwt
 
 SECRET_KEY = "quoc_secret_key"
@@ -100,7 +100,7 @@ async def create_new_user(data: INewUserData, db: AsyncSession = Depends(get_db)
   payload = {
     "sub": new_user.id,
     "email": new_user.email,
-    "exp": datetime.utcnow() + timedelta(hours=24)
+    "exp": await get_vn_time() + timedelta(hours=24)
   }
   
   # token = jwt.encode(payload, SECRET_KEY, algorithm="HS256")
@@ -122,7 +122,7 @@ async def login(data: ILoginUserData, db: AsyncSession = Depends(get_db)):
   payload = {
     "sub": user.id,
     "email": user.email,
-    "exp": datetime.utcnow() + timedelta(hours=24)
+    "exp": await get_vn_time() + timedelta(hours=24)
   }
   # token = jwt.encode(payload, SECRET_KEY, algorithm="HS256")
   token = jwt.encode({"alg": "HS256"}, payload, SECRET_KEY)
@@ -137,12 +137,12 @@ async def update_user_avatar(email: str, data: IUpdateUserData, db: AsyncSession
 
   user.avatar_url = data.avatar_url
   user.username = data.username
-  user.updated_at = datetime.utcnow()
+  user.updated_at = await get_vn_time()
   
   await db.commit()
   await db.refresh(user)
 
-  return {"message": "User updated"}
+  return user
   
 @user_router.put("/update-avatar/{email}")
 async def update_user_avatar(email: str, data: IUpdateUserAvatarData, db: AsyncSession = Depends(get_db)):
@@ -152,7 +152,7 @@ async def update_user_avatar(email: str, data: IUpdateUserAvatarData, db: AsyncS
     raise HTTPException(status_code=404, detail="User not found")
 
   user.avatar_url = data.avatar_url
-  user.updated_at = datetime.utcnow()
+  user.updated_at = await get_vn_time()
   
   await db.commit()
   await db.refresh(user)
@@ -168,7 +168,7 @@ async def update_user_name(email: str, data: IUpdateUserNameData, db: AsyncSessi
     raise HTTPException(status_code=404, detail="User not found")
 
   user.username = data.username
-  user.updated_at = datetime.utcnow()
+  user.updated_at = await get_vn_time()
   
   await db.commit()
   await db.refresh(user)
