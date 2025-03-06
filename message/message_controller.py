@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect, HTTPException
 from models.models import Message, Conversation
 from database import get_db
 from sqlalchemy.future import select
@@ -7,6 +7,8 @@ from types import SimpleNamespace
 from typing import List
 import datetime
 import pytz
+from urllib.parse import urlparse
+from bucket.bucket_controller import s3_client, S3_BUCKET_NAME
 
 message_router = APIRouter()
 
@@ -56,16 +58,24 @@ async def websocket_endpoint(websocket: WebSocket, db: AsyncSession = Depends(ge
           vietnam_now_naive = vietnam_now.replace(tzinfo=None)
           
           conversation.updated_at = vietnam_now_naive
-          print('datetime.datetime.utcnow()', vietnam_now_naive)
           db.add(conversation)
           
         await db.commit()
         await db.refresh(new_message)
-        print("Message saved successfully:", new_message)
       except Exception as e:
         print("Database error:", str(e))
+      
+      print('new_message.id', new_message.id)
+      message_dict = {
+        "id": new_message.id,
+        "conversation_id": new_message.conversation_id,
+        "sender_id": new_message.sender_id,
+        "content": new_message.content,
+        "type": new_message.type,
+        "file_url": new_message.file_url
+      }
 
-      await manager.broadcast(receive_message)
+      await manager.broadcast(message_dict)
   except Exception as e:
     print("WebSocket error:", str(e))
   finally:
@@ -76,5 +86,20 @@ async def get_conversation_messages(conversation_id: str, db: AsyncSession = Dep
   result = await db.execute(select(Message).where(Message.conversation_id == conversation_id))
   messages = result.scalars().all()
   return messages
+
+@message_router.delete("/{message_id}")
+async def delete_conversation(message_id: str, db: AsyncSession = Depends(get_db)):
+  result = await db.execute(select(Message).where(Message.id == message_id))
+  message = result.scalars().first()
   
+  if message is None:
+    raise HTTPException(status_code=404, detail="Message not found")
   
+  if message.file_url:
+    parsed_url = urlparse(message.file_url)
+    filename = parsed_url.path.lstrip("/")
+    s3_client.delete_object(Bucket=S3_BUCKET_NAME, Key=filename)
+    
+  await db.delete(message)
+  await db.commit()
+  return {"message": "Conversation deleted successfully"}

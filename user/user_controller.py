@@ -9,6 +9,7 @@ from interface.interface import (
   IUpdateUserAvatarData, 
   IUpdateUserNameData, 
   ILoginUserData,
+  IUpdateUserData
 )
 from datetime import datetime, timedelta
 import os
@@ -127,6 +128,21 @@ async def login(data: ILoginUserData, db: AsyncSession = Depends(get_db)):
   token = jwt.encode({"alg": "HS256"}, payload, SECRET_KEY)
   return {"access_token": token, "token_type": "bearer"}
 
+@user_router.put("/update/{email}")
+async def update_user_avatar(email: str, data: IUpdateUserData, db: AsyncSession = Depends(get_db)):
+  result = await db.execute(select(User).where(User.email == email))
+  user = result.scalars().first()
+  if user is None:
+    raise HTTPException(status_code=404, detail="User not found")
+
+  user.avatar_url = data.avatar_url
+  user.username = data.username
+  user.updated_at = datetime.utcnow()
+  
+  await db.commit()
+  await db.refresh(user)
+
+  return {"message": "User updated"}
   
 @user_router.put("/update-avatar/{email}")
 async def update_user_avatar(email: str, data: IUpdateUserAvatarData, db: AsyncSession = Depends(get_db)):

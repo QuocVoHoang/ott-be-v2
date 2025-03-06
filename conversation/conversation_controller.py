@@ -6,7 +6,8 @@ from interface.interface import (
     IUpdateConversationAvatarData, 
     IUpdateConversationNameData, 
     IUpdateConversationParticipantData,
-    IRemoveParticipantData
+    IRemoveParticipantData,
+    IUpdateConversationData
 )
 from sqlalchemy.future import select
 import datetime
@@ -19,7 +20,17 @@ async def get_conversation_by_id(conversation_id: str, db: AsyncSession = Depend
     """params: conversation_id"""
     result = await db.execute(select(Conversation).where(Conversation.id == conversation_id))
     conversation = result.scalars().first()
-    return conversation
+    
+    result = await db.execute(select(ConversationParticipant.user_id).where(ConversationParticipant.conversation_id == conversation_id))
+    user_ids = result.scalars().all()
+    
+    result = await db.execute(select(User).where(User.id.in_(user_ids)))
+    users = result.scalars().all()
+    
+    return {
+        "conversation": conversation,
+        "users": users
+    }
 
 
 @conversation_router.get("/users/{conversation_id}")
@@ -54,7 +65,7 @@ async def create_new_conversation(data: INewConversationData, db: AsyncSession =
     new_conversation = Conversation(
         name=data.name,
         type=data.type,
-        avatar_url='',
+        avatar_url=data.avatar_url,
         created_by=creator
     )
     
@@ -110,6 +121,41 @@ async def update_conversation_name(conversation_id: str, data: IUpdateConversati
 
     return {"message": "Conversation name updated"}
 
+@conversation_router.put("/update/{conversation_id}")
+async def update_conversation_name(conversation_id: str, data: IUpdateConversationData, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(Conversation).where(Conversation.id == conversation_id))
+    conversation = result.scalars().first()
+    if conversation is None:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+
+    conversation.name = data.name
+    conversation.avatar_url = data.avatar_url
+    conversation.updated_at = datetime.datetime.utcnow()
+    
+    result = await db.execute(select(User.id).where(User.email.in_(data.participants)))
+    user_ids = result.scalars().all()
+    
+    result = await db.execute(
+        select(ConversationParticipant.user_id)
+        .where(ConversationParticipant.conversation_id == conversation_id, 
+            ConversationParticipant.user_id.in_(user_ids))
+    )
+    
+    existing_participants = {row[0] for row in result.all()} 
+    new_user_ids = [user_id for user_id in user_ids if user_id not in existing_participants]
+
+    new_participants = [
+        ConversationParticipant(conversation_id=conversation_id, user_id=user_id)
+        for user_id in new_user_ids
+    ]
+    
+    db.add_all(new_participants)
+
+
+    await db.commit()
+    await db.refresh(conversation)
+
+    return {"message": "Conversation updated"}
 
 @conversation_router.put("/add-participants/{conversation_id}")
 async def update_conversation_add_participants(conversation_id: str, data: IUpdateConversationParticipantData, db: AsyncSession = Depends(get_db)):

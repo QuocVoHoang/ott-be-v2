@@ -19,3 +19,5 @@ pyjwt==2.10.0
 passlib==1.7.4
 Authlib==1.4.1
 pytz==2024.1
+boto3==1.37.6
+python-multipart==0.0.20
