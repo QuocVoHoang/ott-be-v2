@@ -4,6 +4,7 @@ from user.user_controller import user_router
 from conversation.conversation_controller import conversation_router
 from message.message_controller import message_router
 from bucket.bucket_controller import s3_router
+from sns.sns_controller import sns_router
 
 app = FastAPI(
     title="OTT BACKEND",
@@ -48,4 +49,10 @@ app.include_router(
     router=s3_router,
     prefix="/bucket",
     tags=["Bucket Controller"]
+)
+
+app.include_router(
+    router=sns_router,
+    prefix="/sns",
+    tags=["SSN Controller"]
 )
