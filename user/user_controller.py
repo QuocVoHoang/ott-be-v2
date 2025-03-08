@@ -17,6 +17,11 @@ import os
 from dotenv import load_dotenv
 load_dotenv()
 from authlib.jose import jwt
+import logging
+
+# Cấu hình logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 SECRET_KEY = "quoc_secret_key"
 
@@ -44,11 +49,29 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
   return user
 
 
+# @user_router.get("/info-email/{email}")
+# async def get_user_by_email(email: str, db: AsyncSession = Depends(get_db)):
+#   result = await db.execute(select(User).where(User.email == email))
+#   user = result.scalars().first()
+#   return user
+
 @user_router.get("/info-email/{email}")
 async def get_user_by_email(email: str, db: AsyncSession = Depends(get_db)):
-  result = await db.execute(select(User).where(User.email == email))
-  user = result.scalars().first()
-  return user
+    try:
+        # Thực thi truy vấn
+        result = await db.execute(select(User).where(User.email == email))
+        user = result.scalars().first()
+
+        if user is None:
+            logger.info(f"No user found with email: {email}")
+            raise HTTPException(status_code=404, detail="User not found")
+
+        logger.info(f"Successfully fetched user with email: {email}")
+        return user
+
+    except Exception as e:
+        logger.error(f"Error fetching user by email {email}: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
 
 @user_router.get("/info-id/{user_id}")
 async def get_user_by_id(user_id: str, db: AsyncSession = Depends(get_db)):
