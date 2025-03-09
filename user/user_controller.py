@@ -17,11 +17,6 @@ import os
 from dotenv import load_dotenv
 load_dotenv()
 from authlib.jose import jwt
-import logging
-
-# Cấu hình logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
 
 SECRET_KEY = "quoc_secret_key"
 
@@ -49,29 +44,27 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
   return user
 
 
-# @user_router.get("/info-email/{email}")
-# async def get_user_by_email(email: str, db: AsyncSession = Depends(get_db)):
-#   result = await db.execute(select(User).where(User.email == email))
-#   user = result.scalars().first()
-#   return user
-
 @user_router.get("/info-email/{email}")
 async def get_user_by_email(email: str, db: AsyncSession = Depends(get_db)):
-    try:
-        # Thực thi truy vấn
-        result = await db.execute(select(User).where(User.email == email))
-        user = result.scalars().first()
+  try:
+    result = await db.execute(select(User).where(User.email == email))
+    user = result.scalars().first()
 
-        if user is None:
-            logger.info(f"No user found with email: {email}")
-            raise HTTPException(status_code=404, detail="User not found")
+    if not user:
+      raise HTTPException(status_code=404, detail="User not found")
 
-        logger.info(f"Successfully fetched user with email: {email}")
-        return user
+    return {
+      "id": user.id,
+      "username": user.username,
+      "email": user.email,
+      "avatar_url": user.avatar_url,
+      "created_at": user.created_at
+    }
+  
+  except Exception as e:
+    print(f"Error fetching user: {str(e)}")
+    raise HTTPException(status_code=500, detail="Internal Server Error")
 
-    except Exception as e:
-        logger.error(f"Error fetching user by email {email}: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
 
 @user_router.get("/info-id/{user_id}")
 async def get_user_by_id(user_id: str, db: AsyncSession = Depends(get_db)):
@@ -116,7 +109,7 @@ async def create_new_user(data: INewUserData, db: AsyncSession = Depends(get_db)
     password=data.password
   )
   new_user.set_password(new_user.password)
-  db.add(new_user)
+  await db.add(new_user)
   await db.commit()
   await db.refresh(new_user)
   
@@ -129,6 +122,41 @@ async def create_new_user(data: INewUserData, db: AsyncSession = Depends(get_db)
   # token = jwt.encode(payload, SECRET_KEY, algorithm="HS256")
   token = jwt.encode({"alg": "HS256"}, payload, SECRET_KEY)
   return {"access_token": token, "token_type": "bearer"}
+
+
+# @user_router.post("/signup-phone")
+# async def create_or_login_phone_user(data: IPhoneUser, db: AsyncSession = Depends(get_db)):
+#   result = await db.execute(select(User).where(User.email == data.phone_number))
+#   existing_user = result.scalars().first()
+
+#   if existing_user:
+#     payload = {
+#       "sub": existing_user.id,
+#       "email": existing_user.email,
+#       "exp": await get_vn_time() + timedelta(hours=24)
+#     }
+#     token = jwt.encode({"alg": "HS256"}, payload, SECRET_KEY)
+#     return {"access_token": token, "token_type": "bearer"}
+  
+#   new_user = User(
+#     username=data.phone_number,
+#     email=data.phone_number,
+#     password=data.phone_number
+#   )
+#   new_user.set_password(new_user.password)
+  
+#   db.add(new_user)
+#   await db.commit()
+#   await db.refresh(new_user)
+
+#   payload = {
+#     "sub": new_user.id,
+#     "phone_number": new_user.email,
+#     "exp": await get_vn_time() + timedelta(hours=24)
+#   }
+#   token = jwt.encode({"alg": "HS256"}, payload, SECRET_KEY)
+
+#   return {"access_token": token, "token_type": "bearer"}
 
 
 @user_router.post("/signin")

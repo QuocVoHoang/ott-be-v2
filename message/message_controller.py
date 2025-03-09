@@ -52,14 +52,14 @@ async def websocket_endpoint(websocket: WebSocket, db: AsyncSession = Depends(ge
         )
         
         try:
-          db.add(new_message)
+          await db.add(new_message)
           
           stmt = select(Conversation).where(Conversation.id == data.conversation_id)
           result = await db.execute(stmt)
           conversation = result.scalar_one_or_none()
           if conversation:
             conversation.updated_at = await get_vn_time()
-            db.add(conversation)
+            await db.add(conversation)
           
           await db.commit()
           await db.refresh(new_message)
