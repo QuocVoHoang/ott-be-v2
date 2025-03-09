@@ -56,3 +56,4 @@ pnpm-lock.yaml
 .env
 env
 serviceAccountKey.json
+.vercel
