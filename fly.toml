@@ -1,9 +1,9 @@
-# fly.toml app configuration file generated for be-v2 on 2025-03-09T10:12:50+07:00
+# fly.toml app configuration file generated for ott-be-v2 on 2025-03-09T14:42:00Z
 #
 # See https://fly.io/docs/reference/configuration/ for information about how to use this file.
 #
 
-app = 'be-v2'
+app = 'ott-be-v2'
 primary_region = 'syd'
 
 [build]
@@ -20,3 +20,4 @@ primary_region = 'syd'
   memory = '1gb'
   cpu_kind = 'shared'
   cpus = 1
+  memory_mb = 1024
