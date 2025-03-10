@@ -70,7 +70,7 @@ async def create_new_conversation(data: INewConversationData, db: AsyncSession =
         created_by=creator
     )
     
-    await db.add(new_conversation)
+    db.add(new_conversation)
     await db.commit()
     await db.refresh(new_conversation)
     
@@ -81,7 +81,7 @@ async def create_new_conversation(data: INewConversationData, db: AsyncSession =
         )
         for user_id in user_ids
     ]
-    await db.add_all(participants_records)
+    db.add_all(participants_records)
     await db.commit()
 
     return {
@@ -159,7 +159,7 @@ async def update_conversation_name(conversation_id: str, data: IUpdateConversati
             ConversationParticipant(conversation_id=conversation_id, user_id=user_id)
             for user_id in participants_to_add
         ]
-        await db.add_all(new_participants)
+        db.add_all(new_participants)
 
     await db.commit()
     await db.refresh(conversation)
@@ -210,7 +210,7 @@ async def update_conversation_add_participants(conversation_id: str, data: IUpda
         for user_id in new_user_ids
     ]
     
-    await db.add_all(new_participants)
+    db.add_all(new_participants)
     await db.commit()
 
     return {

@@ -109,7 +109,7 @@ async def create_new_user(data: INewUserData, db: AsyncSession = Depends(get_db)
     password=data.password
   )
   new_user.set_password(new_user.password)
-  await db.add(new_user)
+  db.add(new_user)
   await db.commit()
   await db.refresh(new_user)
   
