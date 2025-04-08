@@ -52,3 +52,6 @@ class IUpdateConversationParticipantData(BaseModel):
   
 class IRemoveParticipantData(BaseModel):
   participant: str
+  
+class FriendRequestCreate(BaseModel):
+  receiver_id: str
