@@ -6,6 +6,7 @@ from message.message_controller import message_router
 from bucket.bucket_controller import s3_router
 from sns.sns_controller import sns_router
 from friend.friend_controller import friend_router
+from call.call_controller import call_router
 
 app = FastAPI(
     title="OTT BACKEND",
@@ -50,6 +51,12 @@ app.include_router(
     router=message_router,
     prefix="/message",
     tags=["Message Controller"]
+)
+
+app.include_router(
+    router=call_router,
+    prefix="/call",
+    tags=["Call Controller"]
 )
 
 app.include_router(
