@@ -49,4 +49,4 @@ yarl==1.18.3
 uvicorn==0.25.0
 bcrypt==4.3.0
 agora-token-builder==1.0.0
-uvicorn[standard]
+websockets
