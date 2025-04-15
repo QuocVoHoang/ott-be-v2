@@ -40,11 +40,13 @@ manager = ConnectionManager()
 
 @message_router.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket, conversation_id: str, db: AsyncSession = Depends(get_db)):
+    print(f"Nhận yêu cầu WebSocket cho conversation_id: {conversation_id}")
     # Kết nối WebSocket với conversation_id được chỉ định
     await manager.connect(websocket, conversation_id)
     try:
         while True:
             receive_message = await websocket.receive_json()
+            print(f"Nhận tin nhắn: {receive_message}")
             data = SimpleNamespace(**receive_message)
 
             # Xử lý gửi tin nhắn
