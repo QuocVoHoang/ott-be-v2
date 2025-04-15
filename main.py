@@ -68,5 +68,5 @@ app.include_router(
 app.include_router(
     router=sns_router,
     prefix="/sns",
-    tags=["SSN Controller"]
+    tags=["SNS Controller"]
 )

@@ -17,16 +17,13 @@ TOKEN_EXPIRATION_SEC = 600 #3600
 
 rooms_db: Dict[str, Set[int]] = {} 
 
-
 class TokenRequest(BaseModel):
   channel_name: str
   uid: int
 
-
 class LeaveRoomRequest(BaseModel):
   channel_name: str
   uid: int
-    
     
 @call_router.post("/agora/token")
 def get_agora_token(req: TokenRequest):
