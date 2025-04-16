@@ -17,10 +17,11 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 Base = declarative_base()
 
-utc_now = datetime.datetime.utcnow()
-vietnam_tz = pytz.timezone('Asia/Ho_Chi_Minh')
-vietnam_now = utc_now.replace(tzinfo=pytz.utc).astimezone(vietnam_tz)
-vietnam_now_naive = vietnam_now.replace(tzinfo=None)
+def get_vietnam_now():
+    utc_now = datetime.datetime.utcnow()
+    vietnam_tz = pytz.timezone('Asia/Ho_Chi_Minh')
+    vietnam_now = utc_now.replace(tzinfo=pytz.utc).astimezone(vietnam_tz)
+    return vietnam_now.replace(tzinfo=None)
 
 class User(Base):
     __tablename__ = "users"
@@ -36,8 +37,8 @@ class User(Base):
     email = Column(String, unique=True, nullable=False)
     password = Column(String, nullable=False)
     avatar_url = Column(String, nullable=True, default='')
-    created_at = Column(DateTime, default=vietnam_now_naive)
-    updated_at = Column(DateTime, default=vietnam_now_naive, onupdate=vietnam_now_naive)
+    created_at = Column(DateTime, default=get_vietnam_now)
+    updated_at = Column(DateTime, default=get_vietnam_now, onupdate=get_vietnam_now)
 
     conversations = relationship("ConversationParticipant", back_populates="user", cascade="all, delete-orphan")
     messages = relationship("Message", back_populates="user", cascade="all, delete-orphan")
@@ -64,8 +65,8 @@ class Friendship(Base):
     requester_id = Column(String(36), ForeignKey("users.id"), nullable=False)
     receiver_id = Column(String(36), ForeignKey("users.id"), nullable=False)
     status = Column(Enum('PENDING', 'ACCEPTED', name="friendship_status"), nullable=False, default='PENDING')
-    created_at = Column(DateTime, default=vietnam_now_naive)
-    updated_at = Column(DateTime, default=vietnam_now_naive, onupdate=vietnam_now_naive)
+    created_at = Column(DateTime, default=get_vietnam_now)
+    updated_at = Column(DateTime, default=get_vietnam_now, onupdate=get_vietnam_now)
 
     requester = relationship("User", foreign_keys=[requester_id], back_populates="sent_friend_requests")
     receiver = relationship("User", foreign_keys=[receiver_id], back_populates="received_friend_requests")
@@ -86,8 +87,8 @@ class Conversation(Base):
     avatar_url = Column(String, nullable=True)
 
     created_by = Column(String(36), ForeignKey("users.id"), nullable=False)
-    created_at = Column(DateTime, default=vietnam_now_naive)
-    updated_at = Column(DateTime, default=vietnam_now_naive, onupdate=vietnam_now_naive)
+    created_at = Column(DateTime, default=get_vietnam_now)
+    updated_at = Column(DateTime, default=get_vietnam_now, onupdate=get_vietnam_now)
 
     participants = relationship("ConversationParticipant", back_populates="conversation", cascade="all, delete-orphan")
     messages = relationship("Message", back_populates="conversation", cascade="all, delete-orphan")
@@ -108,8 +109,8 @@ class Message(Base):
     content = Column(String, nullable=True)
     type = Column(Enum('text', 'image', 'file', 'audio', 'video', name="message_type"), nullable=False, default='text')
     file_url = Column(String, nullable=True)
-    created_at = Column(DateTime, default=vietnam_now_naive)
-    updated_at = Column(DateTime, default=vietnam_now_naive, onupdate=vietnam_now_naive)
+    created_at = Column(DateTime, default=get_vietnam_now)
+    updated_at = Column(DateTime, default=get_vietnam_now, onupdate=get_vietnam_now)
 
     conversation = relationship("Conversation", back_populates="messages")
     user = relationship("User", back_populates="messages")
