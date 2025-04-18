@@ -66,11 +66,13 @@ async def websocket_endpoint(websocket: WebSocket, conversation_id: str, db: Asy
                 try:
                     db.add(new_message)
                     
+                    # Cập nhật conversation
                     stmt = select(Conversation).where(Conversation.id == data.conversation_id)
                     result = await db.execute(stmt)
                     conversation = result.scalar_one_or_none()
                     if conversation:
                         conversation.updated_at = await get_vn_time()
+                        conversation.last_message_id = new_message.id  # Cập nhật last_message_id
                         db.add(conversation)
                     
                     await db.commit()
@@ -99,6 +101,20 @@ async def websocket_endpoint(websocket: WebSocket, conversation_id: str, db: Asy
                     message = result.scalar_one_or_none()
                     if message and str(message.conversation_id) == conversation_id:
                         await db.delete(message)
+                        
+                        # Cập nhật last_message_id
+                        stmt = select(Message).where(Message.conversation_id == conversation_id).order_by(Message.created_at.desc()).limit(1)
+                        result = await db.execute(stmt)
+                        last_message = result.scalar_one_or_none()
+                        
+                        stmt = select(Conversation).where(Conversation.id == conversation_id)
+                        result = await db.execute(stmt)
+                        conversation = result.scalar_one_or_none()
+                        if conversation:
+                            conversation.updated_at = await get_vn_time()
+                            conversation.last_message_id = last_message.id if last_message else None
+                            db.add(conversation)
+                        
                         await db.commit()
                         
                         delete_dict = {
@@ -116,26 +132,45 @@ async def websocket_endpoint(websocket: WebSocket, conversation_id: str, db: Asy
         print("Lỗi WebSocket:", str(e))
     finally:
         manager.disconnect(websocket, conversation_id)
-    
+
+@message_router.get('/get-mess/{message_id}')
+async def get_message_by_id(message_id: str, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(Message).where(Message.id == message_id))
+    message = result.scalars().first()
+    return message
+
 @message_router.get('/{conversation_id}')
 async def get_conversation_messages(conversation_id: str, db: AsyncSession = Depends(get_db)):
-  result = await db.execute(select(Message).where(Message.conversation_id == conversation_id))
-  messages = result.scalars().all()
-  return messages
+    result = await db.execute(select(Message).where(Message.conversation_id == conversation_id))
+    messages = result.scalars().all()
+    return messages
 
 @message_router.delete("/{message_id}")
 async def delete_conversation(message_id: str, db: AsyncSession = Depends(get_db)):
-  result = await db.execute(select(Message).where(Message.id == message_id))
-  message = result.scalars().first()
-  
-  if message is None:
-    raise HTTPException(status_code=404, detail="Message not found")
-  
-  if message.file_url:
-    parsed_url = urlparse(message.file_url)
-    filename = parsed_url.path.lstrip("/")
-    s3_client.delete_object(Bucket=S3_BUCKET_NAME, Key=filename)
+    result = await db.execute(select(Message).where(Message.id == message_id))
+    message = result.scalars().first()
     
-  await db.delete(message)
-  await db.commit()
-  return {"message": "Conversation deleted successfully"}
+    if message is None:
+        raise HTTPException(status_code=404, detail="Message not found")
+    
+    if message.file_url:
+        parsed_url = urlparse(message.file_url)
+        filename = parsed_url.path.lstrip("/")
+        s3_client.delete_object(Bucket=S3_BUCKET_NAME, Key=filename)
+    
+    # Cập nhật last_message_id
+    stmt = select(Message).where(Message.conversation_id == message.conversation_id).order_by(Message.created_at.desc()).limit(1)
+    result = await db.execute(stmt)
+    last_message = result.scalar_one_or_none()
+    
+    stmt = select(Conversation).where(Conversation.id == message.conversation_id)
+    result = await db.execute(stmt)
+    conversation = result.scalar_one_or_none()
+    if conversation:
+        conversation.updated_at = await get_vn_time()
+        conversation.last_message_id = last_message.id if last_message else None  # Cập nhật last_message_id
+        db.add(conversation)
+    
+    await db.delete(message)
+    await db.commit()
+    return {"message": "Message deleted successfully"}

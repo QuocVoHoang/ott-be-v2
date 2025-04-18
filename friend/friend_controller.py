@@ -1,12 +1,12 @@
 from fastapi import APIRouter, Depends, HTTPException
-from models.models import Friendship, User
+from models.models import Friendship, User, Conversation, ConversationParticipant
 from database import get_db
 from pydantic import BaseModel
 from datetime import datetime
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 from sqlalchemy.future import select
-from sqlalchemy import delete, or_
+from sqlalchemy import delete, or_, and_
 from schemas.schemas import FriendRequestSchema, FriendshipActionSchema
 from user.user_controller import get_current_user
 
@@ -42,13 +42,22 @@ async def send_friend_request(
 ):
   result = await db.execute(
     select(Friendship).where(
-      Friendship.requester_id == current_user.id,
-      Friendship.receiver_id == payload.receiver_id
+      or_(
+        and_(
+          Friendship.requester_id == current_user.id,
+          Friendship.receiver_id == payload.receiver_id
+        ),
+        and_(
+          Friendship.requester_id == payload.receiver_id,
+          Friendship.receiver_id == current_user.id
+        )
+      )
     )
   )
+  
   existing = result.scalars().first()
   if existing:
-    raise HTTPException(status_code=400, detail="Request existed!")
+    return HTTPException(status_code=400, detail="Request existed!")
 
   new_request = Friendship(
     requester_id=current_user.id,
@@ -57,6 +66,30 @@ async def send_friend_request(
   )
   db.add(new_request)
   await db.commit()
+  
+  result = await db.execute(select(User).where(User.id == payload.receiver_id))
+  receiver_user = result.scalars().first()
+  if not receiver_user:
+    raise HTTPException(status_code=404, detail="Receiver not found")
+  conversation_name = f"{receiver_user.username}"
+  
+  new_conversation = Conversation(
+    name=conversation_name,
+    type="private",
+    avatar_url="",
+    created_by=current_user.id
+  )
+  db.add(new_conversation)
+  await db.commit()
+  await db.refresh(new_conversation)
+  
+  participants = [
+    ConversationParticipant(conversation_id=new_conversation.id, user_id=current_user.id),
+    ConversationParticipant(conversation_id=new_conversation.id, user_id=payload.receiver_id)
+  ]
+  db.add_all(participants)
+  await db.commit()
+  
   return new_request
 
 

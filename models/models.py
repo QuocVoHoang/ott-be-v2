@@ -85,7 +85,7 @@ class Conversation(Base):
     name = Column(String, nullable=False)
     type = Column(Enum('private', 'group', name="conversation_type"), nullable=False)
     avatar_url = Column(String, nullable=True)
-
+    last_message_id = Column(String(36), nullable=True)
     created_by = Column(String(36), ForeignKey("users.id"), nullable=False)
     created_at = Column(DateTime, default=get_vietnam_now)
     updated_at = Column(DateTime, default=get_vietnam_now, onupdate=get_vietnam_now)
