@@ -6,7 +6,7 @@ from datetime import datetime
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 from sqlalchemy.future import select
-from sqlalchemy import delete, or_, and_
+from sqlalchemy import delete, or_, and_, func
 from schemas.schemas import FriendRequestSchema, FriendshipActionSchema
 from user.user_controller import get_current_user
 
@@ -122,6 +122,7 @@ async def cancel_or_remove_friend(
   db: AsyncSession = Depends(get_db),
   current_user: User = Depends(get_current_user)
 ):
+  # Tìm Friendship
   result = await db.execute(
     select(Friendship).where(Friendship.id == friendship_id)
   )
@@ -130,8 +131,41 @@ async def cancel_or_remove_friend(
   if not friendship:
     raise HTTPException(status_code=404, detail="Không tìm thấy mối quan hệ")
 
+  # Xác định hai user_id liên quan
+  user1_id = friendship.requester_id
+  user2_id = friendship.receiver_id
+
+  # Tìm Conversation liên quan
+  conversation_result = await db.execute(
+    select(Conversation)
+    .join(ConversationParticipant, Conversation.id == ConversationParticipant.conversation_id)
+    .where(
+      Conversation.type == "private",
+      ConversationParticipant.user_id.in_([user1_id, user2_id])
+    )
+    .group_by(Conversation.id)
+    .having(
+      func.count(ConversationParticipant.user_id) == 2
+    )
+  )
+  conversation = conversation_result.scalars().first()
+
+  # Xóa Conversation và ConversationParticipant nếu tìm thấy
+  if conversation:
+    await db.execute(
+      delete(ConversationParticipant).where(
+        ConversationParticipant.conversation_id == conversation.id
+      )
+    )
+    await db.execute(
+      delete(Conversation).where(
+        Conversation.id == conversation.id
+      )
+    )
+
+  # Xóa Friendship
   await db.delete(friendship)
   await db.commit()
 
-  message = "Đã từ chối lời mời kết bạn" if friendship.status == "pending" else "Đã hủy kết bạn"
+  message = "Đã từ chối lời mời kết bạn" if friendship.status == "PENDING" else "Đã hủy kết bạn"
   return {"message": message}
